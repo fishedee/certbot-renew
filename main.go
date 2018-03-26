@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	. "github.com/fishedee/app/log"
 	. "github.com/fishedee/app/workgroup"
 	. "github.com/fishedee/language"
 	"io/ioutil"
+	"net/http"
 	"os/exec"
 	"os/user"
+	"qiniupkg.com/api.v7/auth/qbox"
 	"time"
 )
 
@@ -44,7 +47,7 @@ func NewDeployFactory() (*DeployFactory, error) {
 }
 
 func (this *DeployFactory) Add(name string, deploy Deploy) error {
-	deploy, isExist := this.data[name]
+	_, isExist := this.data[name]
 	if isExist == true {
 		return NewException(1, "get deploy "+name+" dos exist")
 	}
@@ -76,7 +79,7 @@ func NewDeployNginx(config DeployNginxConfig) (*DeployNginx, error) {
 }
 
 func (this *DeployNginx) Run(certName string, chainPerm string, privePem string) error {
-	cmd := exec.Command("service", "nginx", "reload")
+	cmd := exec.Command("service", "nginx", "restart")
 	err := cmd.Run()
 	if err != nil {
 		return NewException(1, err.Error())
@@ -85,6 +88,7 @@ func (this *DeployNginx) Run(certName string, chainPerm string, privePem string)
 }
 
 type DeployQiniu struct {
+	log    Log
 	config DeployQiniuConfig
 }
 
@@ -94,14 +98,153 @@ type DeployQiniuConfig struct {
 	Domain       string `json:"domain"`
 }
 
-func NewDeployQiniu(config DeployQiniuConfig) (*DeployQiniu, error) {
+func NewDeployQiniu(log Log, config DeployQiniuConfig) (*DeployQiniu, error) {
 	return &DeployQiniu{
+		log:    log,
 		config: config,
 	}, nil
 }
 
+func (this *DeployQiniu) GetCertList(client *http.Client) (map[string]interface{}, error) {
+	resp, err := client.Get("https://api.qiniu.com/sslcert")
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	jsonData := map[string]interface{}{}
+	err = json.Unmarshal(data, &jsonData)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	return jsonData, nil
+}
+
+func (this *DeployQiniu) GetSingleCert(client *http.Client, certId string) (map[string]interface{}, error) {
+	resp, err := client.Get("https://api.qiniu.com/sslcert/" + certId)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	jsonData := map[string]interface{}{}
+	err = json.Unmarshal(data, &jsonData)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	return jsonData, nil
+}
+
+func (this *DeployQiniu) AddCert(client *http.Client, param interface{}) (map[string]interface{}, error) {
+	dataJson, err := json.Marshal(param)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	req, err := http.NewRequest("POST", "https://api.qiniu.com/sslcert", bytes.NewReader(dataJson))
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	jsonData := map[string]interface{}{}
+	err = json.Unmarshal(data, &jsonData)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	return jsonData, nil
+}
+
+func (this *DeployQiniu) ModDomainCert(client *http.Client, param interface{}) (map[string]interface{}, error) {
+	dataJson, err := json.Marshal(param)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	req, err := http.NewRequest("PUT", "https://api.qiniu.com/domain/"+this.config.Domain+"/httpsconf", bytes.NewReader(dataJson))
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	jsonData := map[string]interface{}{}
+	err = json.Unmarshal(data, &jsonData)
+	if err != nil {
+		return nil, NewException(1, err.Error())
+	}
+	return jsonData, nil
+}
+
 func (this *DeployQiniu) Run(certName string, chainPerm string, privePem string) error {
-	return NewException(1, "dos not support")
+	client := qbox.NewClient(&qbox.Mac{
+		AccessKey: this.config.AccessToken,
+		SecretKey: []byte(this.config.AccessSecert),
+	}, &http.Transport{})
+
+	//查看证书列表
+	certList, err := this.GetCertList(client)
+	if err != nil {
+		return err
+	}
+	isExist := false
+
+	for _, cert := range certList["certs"].([]interface{}) {
+		singleCert := cert.(map[string]interface{})
+		certId := singleCert["certid"].(string)
+		certInfo, err := this.GetSingleCert(client, certId)
+		if err != nil {
+			return err
+		}
+		certInfo = certInfo["cert"].(map[string]interface{})
+		pri := certInfo["pri"].(string)
+		ca := certInfo["ca"].(string)
+		if chainPerm == ca && privePem == pri {
+			isExist = true
+			break
+		}
+	}
+	if isExist == true {
+		return nil
+	}
+
+	//上传新证书
+	name := this.config.Domain + time.Now().Format("20060102150405")
+	addCertResult, err := this.AddCert(client, map[string]interface{}{
+		"Name": name,
+		"Pri":  privePem,
+		"Ca":   chainPerm,
+	})
+	if err != nil {
+		return err
+	}
+	certId := addCertResult["certID"].(string)
+
+	this.log.Debug("qiniu add cert id:%v,name:%v", certId, name)
+	//更新域名证书
+	_, err = this.ModDomainCert(client, map[string]interface{}{
+		"certid":     certId,
+		"forceHttps": true,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type Renew struct {
@@ -147,7 +290,7 @@ func (this *Renew) Run() error {
 		if err != nil {
 			return err
 		}
-		err = deploy.Run(certName, string(chainPerm), string(privatePerm))
+		err = deploy.Run(certName, string(chainPerm[0:len(chainPerm)-1]), string(privatePerm[0:len(privatePerm)-1]))
 		if err != nil {
 			return err
 		}
@@ -215,7 +358,7 @@ func NewRunner(log Log, filename string) (*Runner, error) {
 			if err != nil {
 				return nil, NewException(1, err.Error())
 			}
-			deployQiniu, err := NewDeployQiniu(deployQiniuConfig)
+			deployQiniu, err := NewDeployQiniu(log, deployQiniuConfig)
 			if err != nil {
 				return nil, err
 			}
@@ -249,6 +392,17 @@ func NewRunner(log Log, filename string) (*Runner, error) {
 	}, nil
 }
 
+func (this *Runner) runSingle() {
+	for _, renew := range this.renew {
+		this.log.Debug("renew cert %v begin ...", renew.GetCertName())
+		err := renew.Run()
+		if err != nil {
+			this.log.Error("renew cert %v error %v", renew.GetCertName(), err.Error())
+		} else {
+			this.log.Debug("renew cert %v finish", renew.GetCertName())
+		}
+	}
+}
 func (this *Runner) Run() error {
 	user, err := user.Current()
 	if err != nil {
@@ -258,17 +412,12 @@ func (this *Runner) Run() error {
 		return NewException(1, "You should login by root")
 	}
 	this.log.Debug("certbot-renew is running...")
+	this.runSingle()
 	isRunning := true
 	for isRunning {
 		select {
 		case <-time.After(this.interval):
-			for _, renew := range this.renew {
-				this.log.Debug("renew cert %v begin ...", renew.GetCertName())
-				err := renew.Run()
-				if err != nil {
-					this.log.Error("renew cert %v error %v", renew.GetCertName(), err.Error())
-				}
-			}
+			this.runSingle()
 		case <-this.closeChan:
 			isRunning = false
 		}

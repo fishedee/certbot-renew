@@ -4,9 +4,9 @@
 		{	
 			"name":"qiniu_fishedee",
 			"type":"qiniu",
-			"access_token":"xx",
-			"access_secert":"xxx",
-			"domain":"xxx"
+			"access_token":"dLlfL4vQDb0iD7g7ppj1jQe0xNKnYVle4uf2m7CR",
+			"access_secert":"3Rc-ryiGWBKeeXnU1uGspPBxJp3iAuXoLCk11y3y",
+			"domain":"image.fishedee.com"
 		},
 		{	
 			"name":"nginx_fishedee",
@@ -17,7 +17,7 @@
 	"renew":[
 		{
 			"cert_name":"fishedee.com",
-			"deploy":["qiniu_fishedee","nginx_fishedee"]
+			"deploy":["nginx_fishedee","qiniu_fishedee"]
 		}
 	]
 }
