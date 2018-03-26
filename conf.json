@@ -1,0 +1,23 @@
+{
+	"interval":"1m",
+	"deploy":[
+		{	
+			"name":"qiniu_fishedee",
+			"type":"qiniu",
+			"access_token":"xx",
+			"access_secert":"xxx",
+			"domain":"xxx"
+		},
+		{	
+			"name":"nginx_fishedee",
+			"type":"nginx",
+			"address":"127.0.0.1"
+		}
+	],
+	"renew":[
+		{
+			"cert_name":"fishedee.com",
+			"deploy":["qiniu_fishedee","nginx_fishedee"]
+		}
+	]
+}
