@@ -270,17 +270,12 @@ func (this *Renew) GetCertName() string {
 
 func (this *Renew) Run() error {
 	certName := this.config.CertName
-	cmd := exec.Command("certbot", "renew", "--cert-name", certName)
-	err := cmd.Run()
-	if err != nil {
-		return NewException(1, err.Error())
-	}
 
-	chainPerm, err := ioutil.ReadFile("/etc/letsencrypt/live/" + certName + "/fullchain.pem")
+	chainPerm, err := ioutil.ReadFile("/root/.acme.sh/" + certName + "/fullchain.cer")
 	if err != nil {
 		return NewException(1, err.Error())
 	}
-	privatePerm, err := ioutil.ReadFile("/etc/letsencrypt/live/" + certName + "/privkey.pem")
+	privatePerm, err := ioutil.ReadFile("/root/.acme.sh/" + certName + "/" + certName + ".key")
 	if err != nil {
 		return NewException(1, err.Error())
 	}
