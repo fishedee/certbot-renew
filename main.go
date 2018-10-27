@@ -250,6 +250,7 @@ func (this *DeployQiniu) Run(certName string, chainPerm string, privePem string)
 type Renew struct {
 	config  RenewConfig
 	factory *DeployFactory
+	log     Log
 }
 
 type RenewConfig struct {
@@ -257,8 +258,9 @@ type RenewConfig struct {
 	Deploy   []string `json:"deploy"`
 }
 
-func NewRenew(config RenewConfig, factory *DeployFactory) (*Renew, error) {
+func NewRenew(log Log, config RenewConfig, factory *DeployFactory) (*Renew, error) {
 	return &Renew{
+		log:     log,
 		config:  config,
 		factory: factory,
 	}, nil
@@ -281,6 +283,7 @@ func (this *Renew) Run() error {
 	}
 
 	for _, deployName := range this.config.Deploy {
+		this.log.Debug("deploy %v begin...", deployName)
 		deploy, err := this.factory.Get(deployName)
 		if err != nil {
 			return err
@@ -289,6 +292,7 @@ func (this *Renew) Run() error {
 		if err != nil {
 			return err
 		}
+		this.log.Debug("deploy %v end...", deployName)
 	}
 	return nil
 }
@@ -372,7 +376,7 @@ func NewRunner(log Log, filename string) (*Runner, error) {
 		if err != nil {
 			return nil, NewException(1, err.Error())
 		}
-		renew, err := NewRenew(singleRenewConfig, deployFactory)
+		renew, err := NewRenew(log, singleRenewConfig, deployFactory)
 		if err != nil {
 			return nil, err
 		}
