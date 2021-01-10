@@ -273,11 +273,11 @@ func (this *Renew) GetCertName() string {
 func (this *Renew) Run() error {
 	certName := this.config.CertName
 
-	chainPerm, err := ioutil.ReadFile("/root/.acme.sh/" + certName + "/fullchain.cer")
+	chainPerm, err := ioutil.ReadFile("/home/fish/.acme.sh/" + certName + "/fullchain.cer")
 	if err != nil {
 		return NewException(1, err.Error())
 	}
-	privatePerm, err := ioutil.ReadFile("/root/.acme.sh/" + certName + "/" + certName + ".key")
+	privatePerm, err := ioutil.ReadFile("/home/fish/.acme.sh/" + certName + "/" + certName + ".key")
 	if err != nil {
 		return NewException(1, err.Error())
 	}
