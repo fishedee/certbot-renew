@@ -93,9 +93,9 @@ type DeployQiniu struct {
 }
 
 type DeployQiniuConfig struct {
-	AccessToken  string `json:"access_token"`
-	AccessSecert string `json:"access_secert"`
-	Domain       string `json:"domain"`
+	AccessToken  string   `json:"access_token"`
+	AccessSecert string   `json:"access_secert"`
+	Domains      []string `json:"domains"`
 }
 
 func NewDeployQiniu(log Log, config DeployQiniuConfig) (*DeployQiniu, error) {
@@ -165,12 +165,12 @@ func (this *DeployQiniu) AddCert(client *http.Client, param interface{}) (map[st
 	return jsonData, nil
 }
 
-func (this *DeployQiniu) ModDomainCert(client *http.Client, param interface{}) (map[string]interface{}, error) {
+func (this *DeployQiniu) ModDomainCert(client *http.Client, domain string, param interface{}) (map[string]interface{}, error) {
 	dataJson, err := json.Marshal(param)
 	if err != nil {
 		return nil, NewException(1, err.Error())
 	}
-	req, err := http.NewRequest("PUT", "https://api.qiniu.com/domain/"+this.config.Domain+"/httpsconf", bytes.NewReader(dataJson))
+	req, err := http.NewRequest("PUT", "https://api.qiniu.com/domain/"+domain+"/httpsconf", bytes.NewReader(dataJson))
 	if err != nil {
 		return nil, NewException(1, err.Error())
 	}
@@ -224,7 +224,7 @@ func (this *DeployQiniu) Run(certName string, chainPerm string, privePem string)
 	}
 
 	//上传新证书
-	name := this.config.Domain + time.Now().Format("20060102150405")
+	name := "qiniu_" + time.Now().Format("20060102150405")
 	addCertResult, err := this.AddCert(client, map[string]interface{}{
 		"Name": name,
 		"Pri":  privePem,
@@ -237,13 +237,16 @@ func (this *DeployQiniu) Run(certName string, chainPerm string, privePem string)
 
 	this.log.Debug("qiniu add cert id:%v,name:%v", certId, name)
 	//更新域名证书
-	_, err = this.ModDomainCert(client, map[string]interface{}{
-		"certid":     certId,
-		"forceHttps": true,
-	})
-	if err != nil {
-		return err
+	for _, domain := range this.config.Domains {
+		_, err = this.ModDomainCert(client, domain, map[string]interface{}{
+			"certid":     certId,
+			"forceHttps": true,
+		})
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
