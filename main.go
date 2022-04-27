@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	. "github.com/fishedee/app/log"
-	. "github.com/fishedee/app/workgroup"
 	. "github.com/fishedee/language"
 	"io/ioutil"
 	"net/http"
@@ -276,11 +275,11 @@ func (this *Renew) GetCertName() string {
 func (this *Renew) Run() error {
 	certName := this.config.CertName
 
-	chainPerm, err := ioutil.ReadFile("/home/fish/.acme.sh/" + certName + "/fullchain.cer")
+	chainPerm, err := ioutil.ReadFile("/etc/nginx/ssl/cert.pem")
 	if err != nil {
 		return NewException(1, err.Error())
 	}
-	privatePerm, err := ioutil.ReadFile("/home/fish/.acme.sh/" + certName + "/" + certName + ".key")
+	privatePerm, err := ioutil.ReadFile("/etc/nginx/ssl/key.pem")
 	if err != nil {
 		return NewException(1, err.Error())
 	}
@@ -410,20 +409,8 @@ func (this *Runner) Run() error {
 	if err != nil {
 		return NewException(1, err.Error())
 	}
-	if user.Username != "root" {
-		return NewException(1, "You should login by root")
-	}
-	this.log.Debug("certbot-renew is running...")
+	this.log.Debug("certbot-renew is running... %v",user)
 	this.runSingle()
-	isRunning := true
-	for isRunning {
-		select {
-		case <-time.After(this.interval):
-			this.runSingle()
-		case <-this.closeChan:
-			isRunning = false
-		}
-	}
 	return nil
 }
 
@@ -444,14 +431,9 @@ func main() {
 		log.Error("%v", err.Error())
 		return
 	}
-	workgroup, err := NewWorkGroup(log, WorkGroupConfig{
-		CloseTimeout: time.Second * 5,
-		GraceClose:   true,
-	})
-	workgroup.Add(runner)
-	err = workgroup.Run()
-	if err != nil {
-		log.Error("%v", err.Error())
-		return
+	err = runner.Run()
+	if err != nil{
+		log.Error("%v",err.Error())
 	}
+	fmt.Println("success")
 }
