@@ -6,7 +6,7 @@
 			"type":"qiniu",
 			"access_token":"dLlfL4vQDb0iD7g7ppj1jQe0xNKnYVle4uf2m7CR",
 			"access_secert":"3Rc-ryiGWBKeeXnU1uGspPBxJp3iAuXoLCk11y3y",
-			"domains":["image.fishedee.com","yinghaostatic.fishedee.com"]
+			"domains":["image.fishedee.com"]
 		},
 		{	
 			"name":"nginx_fishedee",
